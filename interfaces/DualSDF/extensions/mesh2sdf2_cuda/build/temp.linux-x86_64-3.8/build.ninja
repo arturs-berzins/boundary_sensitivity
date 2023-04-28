@@ -1,0 +1,28 @@
+ninja_required_version = 1.3
+cxx = c++
+nvcc = /usr/local/cuda-11.3/bin/nvcc
+
+cflags = -pthread -B /home/arturs/anaconda3/envs/py38/compiler_compat -Wl,--sysroot=/ -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -Wstrict-prototypes -fPIC -I/home/arturs/anaconda3/envs/py38/lib/python3.8/site-packages/torch/include -I/home/arturs/anaconda3/envs/py38/lib/python3.8/site-packages/torch/include/torch/csrc/api/include -I/home/arturs/anaconda3/envs/py38/lib/python3.8/site-packages/torch/include/TH -I/home/arturs/anaconda3/envs/py38/lib/python3.8/site-packages/torch/include/THC -I/usr/local/cuda-11.3/include -I/home/arturs/anaconda3/envs/py38/include/python3.8 -c
+post_cflags = -std=c++11 -ffast-math -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=mesh2sdf -D_GLIBCXX_USE_CXX11_ABI=0
+cuda_cflags = -I/home/arturs/anaconda3/envs/py38/lib/python3.8/site-packages/torch/include -I/home/arturs/anaconda3/envs/py38/lib/python3.8/site-packages/torch/include/torch/csrc/api/include -I/home/arturs/anaconda3/envs/py38/lib/python3.8/site-packages/torch/include/TH -I/home/arturs/anaconda3/envs/py38/lib/python3.8/site-packages/torch/include/THC -I/usr/local/cuda-11.3/include -I/home/arturs/anaconda3/envs/py38/include/python3.8 -c
+cuda_post_cflags = -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -gencode arch=compute_52,code=sm_52 -gencode arch=compute_61,code=sm_61 -gencode arch=compute_70,code=sm_70 -gencode arch=compute_70,code=compute_70 -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=mesh2sdf -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++14
+ldflags = 
+
+rule compile
+  command = $cxx -MMD -MF $out.d $cflags -c $in -o $out $post_cflags
+  depfile = $out.d
+  deps = gcc
+
+rule cuda_compile
+  depfile = $out.d
+  deps = gcc
+  command = $nvcc  $cuda_cflags -c $in -o $out $cuda_post_cflags
+
+
+
+build /home/arturs/shape_gradient/DualSDF/DualSDF/extensions/mesh2sdf2_cuda/build/temp.linux-x86_64-3.8/mesh2sdf_kernel.o: cuda_compile /home/arturs/shape_gradient/DualSDF/DualSDF/extensions/mesh2sdf2_cuda/mesh2sdf_kernel.cu
+
+
+
+
+

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Shape Gradients Demo</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="main.css">
+		<style>
+			body {
+				background-color: #f0f0f0;
+				color: #444;
+			}
+			a {
+				color: #08f;
+			}
+		</style>
+	</head>
+	<body>
+        <!-- <div style="position: absolute;">
+            <div id="highres" title="High-res">
+            High-res rendering:
+            <img id="highres_img" src="./placeholder.png" alt="High-res rendering" width="224" height="224">
+            </div>
+            <div id="auxinfo">Feature norm: <span id="kld"></span></div>
+        </div> -->
+		<div id="container"></div>
+		<div id="info">
+			<!--<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - DualSDF Demo <br />-->
+            <!-- <b>GUI</b><br /> -->
+            <!-- Move and scale the sphere primitives to customize your chair!  <br />
+            Check <b>toggleScale</b> to switch between scale and translation manipulation.  <br />
+            Press <b>getData</b> to sample a new random shape.  <br />
+            Adjust <b>Gamma</b> and <b>Beta</b> to change the strength of latent regularization. -->
+		</div>
+		<script type="module">
+
+			import * as THREE from '../build/three.module.js';
+			// import { GUI } from './jsm/libs/dat.gui.module.js';
+			import { OrbitControls } from './jsm/controls/OrbitControls.js';
+			import { VertexNormalsHelper } from './jsm/helpers/VertexNormalsHelper.js';
+
+			var isIntersecting, isHandling;
+			var container; 
+			var camera, scene, renderer, controls;
+			var point = new THREE.Vector3();
+			
+			var raycaster, marker, mesh, normal_line;
+			var handles = [];
+			var mouse = new THREE.Vector2();
+			var intersections = [];
+			var feature;
+
+			var params = {
+				lambda: .1,
+				// editing modes; interactive vs
+				// MC resolution
+			};
+            
+            var xhr = new XMLHttpRequest();
+            var xhr_img = new XMLHttpRequest();
+
+			init();
+			// animate();
+            render();
+            
+			function init() {
+
+				// Container and window
+				container = document.getElementById( 'container' );
+                window.addEventListener( 'resize', onWindowResize, false );
+
+				// Scene
+				scene = new THREE.Scene();
+				scene.background = new THREE.Color( 0xf0f0f0 );
+
+				// Camera
+				camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, .1, 10000 );
+                camera.position.set(-3.40, 2.10, 2.15 );
+				scene.add( camera );
+
+				// Lights
+				scene.add( new THREE.AmbientLight( 0xffffff, 0.5) );
+				var light = new THREE.SpotLight( 0xffffff, 0.5 );
+				light.position.set( 4, 10, -3 );
+				light.angle = Math.PI * 0.2;
+				light.castShadow = true;
+				light.shadow.bias = - 0.000222;
+				light.shadow.mapSize.width = 1024;
+				light.shadow.mapSize.height = 1024;
+				scene.add( light );
+				// var spotLightHelper = new THREE.SpotLightHelper( light );
+				// scene.add( spotLightHelper );
+
+				var light = new THREE.SpotLight( 0xffffff, 0.3 );
+				light.position.set( 3, -5, 3 );
+				light.angle = Math.PI * 0.2;
+				light.castShadow = true;
+				light.shadow.bias = - 0.000222;
+				light.shadow.mapSize.width = 1024;
+				light.shadow.mapSize.height = 1024;
+				scene.add( light );
+				// var spotLightHelper = new THREE.SpotLightHelper( light );
+				// scene.add( spotLightHelper );
+
+
+
+				// Ground plane
+				var planeGeometry = new THREE.PlaneBufferGeometry( 10, 10 );
+				planeGeometry.rotateX( - Math.PI / 2 );
+				var planeMaterial = new THREE.ShadowMaterial( { opacity: 0.2 } );
+				var plane = new THREE.Mesh( planeGeometry, planeMaterial );
+				plane.position.y = -1;
+				plane.receiveShadow = true;
+				scene.add( plane );
+
+				// Ground plane grid
+				// var helper = new THREE.GridHelper( 10, 10 );
+				// helper.position.y = -1;
+				// helper.material.opacity = 0.25;
+				// helper.material.transparent = true;
+				// scene.add( helper );
+
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.shadowMap.enabled = true;
+				container.appendChild( renderer.domElement );
+
+				// GUI controls
+				// var gui = new GUI();
+                // gui.add( params, 'lambda', 0, 1).step( 0.01 );
+				// gui.close();
+
+				// Camera controls
+				controls = new OrbitControls( camera, renderer.domElement );
+				controls.damping = 0.2;
+				controls.addEventListener( 'change', render );
+
+				const markerGeometry = new THREE.SphereGeometry( 0.01 );
+				const markerMaterial = new THREE.MeshBasicMaterial( { color: 0xff0000 } );
+				marker = new THREE.Mesh( markerGeometry, markerMaterial );
+				scene.add( marker );
+
+				isIntersecting = false;
+				isHandling = false;
+
+				// Intersections 
+				// https://discourse.threejs.org/t/finding-nearest-vertex-of-a-mesh-to-mouse-cursor/4167/13
+				// https://jsfiddle.net/f2Lommf5/14253/
+				raycaster = new THREE.Raycaster();
+
+				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+				document.addEventListener( 'mouseup', onDocumentMouseUp, false );
+				document.addEventListener( 'dblclick', onDocumentDblClick, false );
+				document.addEventListener( 'keydown', onDocumentKeyDown, false );
+
+                getData();
+                
+			}
+
+			function newHandle(marker){ // TODO: maybe this should be a class
+				const handleGeometry = new THREE.SphereGeometry( 0.01 );
+				const handleMaterial = new THREE.MeshBasicMaterial( { color: 0xff0000 } );
+				const handle = new THREE.Mesh( handleGeometry, handleMaterial );
+				handle.position.copy( marker.position );
+				handle.origin = marker.position.clone();
+				handle.normal = marker.normal.clone();
+				handle.normal_line = newNormal(handle);
+
+				scene.add( handle );
+				return handle
+			}
+
+			function newNormal(handle){
+				const p0 = handle.position.clone().add(handle.normal.clone().multiplyScalar(-0.1))
+				const p1 = handle.position.clone().add(handle.normal.clone().multiplyScalar( 0.1))
+				const normalLineGeometry = new THREE.BufferGeometry().setFromPoints( [p0, p1] );
+				const normalLineMaterial = new THREE.LineBasicMaterial( { color: 0xff0000 } );
+				const normal_line = new THREE.Line( normalLineGeometry, normalLineMaterial );
+				scene.add( normal_line );
+				return normal_line
+			}
+
+			function onDocumentMouseDown(){
+				if (isIntersecting){
+					handles.push(newHandle(marker))
+					controls.enabled = false;
+					isIntersecting = false;
+					isHandling = true;
+					render();
+				}
+			}
+			function onDocumentMouseUp(){
+				if (isHandling){
+					controls.enabled = true;
+					isHandling = false;
+					render();
+				}
+			}
+			function onDocumentDblClick(){
+				confirmDeformation()
+			}
+
+			function onDocumentKeyDown(evt){
+				if (evt.key == 'Enter') confirmDeformation();
+				if (evt.key == 'Escape') clearHandles();
+			}
+
+			function confirmDeformation(){
+				if (handles.length==0) return
+				pushData();
+				clearHandles();
+			}
+
+			function clearHandles(){
+				while (handles.length) {
+					const handle = handles.pop()
+					scene.remove(handle.normal_line)
+					scene.remove(handle)
+				}
+				render()
+			}
+            
+            function onWindowResize() {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize( window.innerWidth, window.innerHeight );
+                render();
+			}
+ 
+            function getData() {
+                // Pull data from server
+                console.log('Pulling data from server');
+                // ajax_send('/get_attributes', '{}');
+				ajaxRequestMesh();
+            }
+
+			function render() {
+				renderer.render( scene, camera );
+			}
+
+			function ajaxRequestMesh(){ // This should be a GET request, not POST
+                var url = '/get_mesh'
+				var data = '{}';
+				xhr.open("POST", url, false);
+                xhr.onload = ajaxReceiveMesh;
+                xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
+                xhr.send(data);
+			}
+
+			function ajaxReceiveMesh(){
+				scene.remove( mesh );
+                var response_data = JSON.parse(this.responseText);
+
+				const geometry = new THREE.BufferGeometry();
+				// convert to right format
+				const verts = new Float32Array(response_data.verts.flat());
+				const faces = new Uint16Array(response_data.faces.flat());
+				const normals = new Float32Array(response_data.normals.flat());
+				feature = response_data.feature;
+				// set vertices and indices https://stackoverflow.com/q/60119026/10314376
+				geometry.setAttribute( 'position', new THREE.BufferAttribute(verts, 3) );
+				geometry.setAttribute( 'normal', new THREE.BufferAttribute(normals, 3) );
+				geometry.setIndex(new THREE.BufferAttribute(faces, 1));
+				// geometry.computeVertexNormals();
+				// TODO: later we need to receive normals from the implicit not MC
+				// geometry.receiveShadow = false;
+			
+				var material = new THREE.MeshLambertMaterial( {color: 0xffe5cc, opacity: 0.8, transparent: true} );
+				// material.side = THREE.DoubleSide;
+				// material.side = THREE.BackSide;
+				mesh = new THREE.Mesh( geometry, material );
+				mesh.castShadow = true;
+				scene.add( mesh );
+				// const helper = new VertexNormalsHelper( mesh, .1, 0xff0000 );
+				// scene.add( helper );
+				render();
+			}
+
+			function vector3ToTriplet(vector3){
+				return [vector3.x, vector3.y, vector3.z]
+			}
+
+			function pushData() {
+				var locations = [];
+				var displacements = [];
+				for (var i = 0; i < handles.length; i++){
+					const handle = handles[i];
+					console.log(handle)
+					locations.push(vector3ToTriplet(handle.origin))
+					displacements.push(new THREE.Vector3().subVectors(handle.position, handle.origin).dot(handle.normal))
+				}
+				console.log(locations)
+				console.log(displacements)
+				// var locations = [[marker.position.x, marker.position.y, marker.position.z]];
+				// var displacements = [new THREE.Vector3().subVectors(handle.position, marker.position).dot(marker.normal) ];
+				// Send location, magnitude of deformations along normal and latent code
+				// Later include verts and faces to update the mesh instead of remeshing
+                var ser = JSON.stringify({locations: locations, displacements: displacements, feature: feature});
+                ajax_send('/deform', ser);
+            }
+            
+            function ajax_send(url, data) {
+                xhr.open("POST", url, false);
+                xhr.onload = ajaxReceiveMesh;
+                // xhr.onload = ajax_respond;
+                xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
+                xhr.send(data);
+            }
+            
+            function ajax_respond() {
+                var response_data = JSON.parse(this.responseText);
+                console.log(response_data);
+                // var attrs = response_data.attrs;
+            }
+
+			function onDocumentMouseMove() {
+				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+				mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+			// }
+
+			// function animate() {
+			// 	requestAnimationFrame( animate );
+				// TODO: not sure if we whould call animate or render on mousemove?
+				// Both seem to work fine, but try to avoid 
+				raycaster.setFromCamera( mouse, camera );
+
+
+				// Intersect with mesh
+				if (!isHandling){
+					raycaster.intersectObject( mesh, false, intersections );
+					if ( intersections.length > 0 ) {
+						const intersectionPoint = intersections[0].point;
+						marker.position.copy( intersectionPoint );
+						marker.visible = true;
+						marker.normal = intersections[0].face.normal; // TODO: these should ideally be from the implicit. either precompute or request
+						isIntersecting = true;
+					} else {
+						marker.visible = false;
+						isIntersecting = false;
+					}
+					intersections.length = 0; // reset the result array
+				}
+
+				if (isHandling){
+					// Intersect with normal
+					// https://stackoverflow.com/q/54853717
+					// https://github.com/mrdoob/three.js/blob/master/examples/webgl_interactive_lines.html
+					// Alternative: DragControl or https://discourse.threejs.org/t/mesh-editing-vertices-and-faces/15563
+					const line_intersections = raycaster.intersectObject(handles.at(-1).normal_line, false);
+					if ( line_intersections.length > 0 ) {
+						const intersectionPoint = line_intersections[0].point;
+						handles.at(-1).position.copy( intersectionPoint );
+						handles.at(-1).visible = true;
+						marker.visible = false;
+						isIntersecting = false;
+						isHandling = true;
+					} else {
+						handle.visible = false;
+						marker.visible = true;
+						isIntersecting = true;
+						isHandling = false;
+					}
+				}
+
+				render()
+			}
+		</script>
+
+	</body>
+</html>
