@@ -13,24 +13,47 @@
 			a {
 				color: #08f;
 			}
+			#container {
+				position: relative;
+			}
+			.tooltip {
+				position: absolute;
+				bottom: 10px;
+				right: 20px;
+			}
+			
+			.tooltiptext {
+				visibility: hidden;
+				background-color: black;
+				color: #fff;
+				text-align: center;
+				border-radius: 3px;
+				padding: 10px 0;
+				/* Position the tooltip */
+				position: absolute;
+				z-index: 1;
+			}
+
+			.tooltip .tooltiptext {
+				width: 300px;
+				bottom: 100%;
+				right: 0%;
+			}
+			
+			.tooltip:hover .tooltiptext {
+				visibility: visible;
+			}
 		</style>
 	</head>
 	<body>
-        <!-- <div style="position: absolute;">
-            <div id="highres" title="High-res">
-            High-res rendering:
-            <img id="highres_img" src="./placeholder.png" alt="High-res rendering" width="224" height="224">
-            </div>
-            <div id="auxinfo">Feature norm: <span id="kld"></span></div>
-        </div> -->
-		<div id="container"></div>
-		<div id="info">
-			<!--<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - DualSDF Demo <br />-->
-            <!-- <b>GUI</b><br /> -->
-            <!-- Move and scale the sphere primitives to customize your chair!  <br />
-            Check <b>toggleScale</b> to switch between scale and translation manipulation.  <br />
-            Press <b>getData</b> to sample a new random shape.  <br />
-            Adjust <b>Gamma</b> and <b>Beta</b> to change the strength of latent regularization. -->
+		<div id="container">
+			<div class="tooltip"> Help
+				<span class="tooltiptext">
+					Place target handles on the surface by clicking and dragging along the normal.
+					<br>
+					To fit the shape to the handles, double mouse-click or hit Enter.
+				</span>
+			</div>
 		</div>
 		<script type="module">
 
@@ -130,6 +153,7 @@
 				// GUI controls
 				// var gui = new GUI();
                 // gui.add( params, 'lambda', 0, 1).step( 0.01 );
+                // gui.add();
 				// gui.close();
 
 				// Camera controls
