@@ -16,7 +16,7 @@ python demo.py interfaces/DualSDF --interface_args \
 "./config/dualsdf_chairs_demo.yaml --pretrained ./pretrained/dualsdf_chairs_demo/epoch_2799.pth"
 ```
 Then visit `localhost:1234`.
-Or type `python demo.py --help` to see and adjust the launch arguments.
+Type `python demo.py --help` to see and adjust the launch arguments.
 
 https://user-images.githubusercontent.com/42326304/235196326-88f0550d-3b84-4758-9137-15215baa46fc.mp4
 
