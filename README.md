@@ -1,6 +1,6 @@
 # Neural Implicit Shape Editing using Boundary Sensitivity
 **Arturs Berzins, Moritz Ibing, Leif Kobbelt**
-### **[arXiv](https://arxiv.org/abs/2304.12951) | [SlidesLive](https://recorder-v3.slideslive.com/?share=79382&s=70b38e48-82c0-4104-9d01-18983330f331)**
+### **[arXiv](https://arxiv.org/abs/2304.12951) | [SlidesLive](https://recorder-v3.slideslive.com/?share=79382&s=70b38e48-82c0-4104-9d01-18983330f331) | [OpenReview](https://openreview.net/forum?id=CMPIBjmhpo)**
 
 ## GUI Demo for Semantic Editing
 
