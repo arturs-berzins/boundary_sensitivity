@@ -8,11 +8,12 @@ import http.server
 import socketserver
 from functools import partial
 
-from utils import utils
+from utils import boundary_sensitivity
 from utils.gradients import get_grads
-from utils.utils_exp import get_mesh
+from utils.mesh import get_mesh
 
 import numpy as np
+from time import time
 
 class TestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, interface, mc_resolution, decimals, *args, **kwargs):
@@ -46,7 +47,7 @@ class TestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
         self.end_headers()
         return f
-        
+
     def do_POST(self):
         length = int(self.headers.get_all('content-length')[0])
         data_string = self.rfile.read(length)
@@ -63,27 +64,31 @@ class TestHandler(http.server.SimpleHTTPRequestHandler):
 
             ## Compute dfdx and dfdL at points
             pointz = torch.hstack([L[None,:].repeat(len(handles),1), handles])
-            dfdLx = get_grads(self.interface.f, pointz, wrt_params=False)
+            dfdLx = get_grads(self.interface.f, pointz)
+            # dfdLx = get_grads_func(self.interface, pointz) ## If you want to use torch.func to compute gradients instead
             dfdL, dfdx = torch.split(dfdLx, [len(dfdLx.T)-3,3], dim=1)
 
             ## LSTSQ
-            B = utils.grads_to_basis(dfdx, dfdL)
-            dL = utils.solve_lstsq(B, dn_target, lmbd=.1, verbose=False)
+            B = boundary_sensitivity.grads_to_basis(dfdx, dfdL)
+            dL = boundary_sensitivity.solve_lstsq(B, dn_target, lmbd=.1, verbose=False)
             # dn_approx = B@dL
 
             feature = L + dL
+            t0 = time()
             verts, faces, normals, feature = self.get_new_shape(feature=feature)
+            print(f"Took {(time() - t0):.3f}s for marching cubes")
             self.send_shape(verts, faces, normals, feature)
 
         elif self.path == '/get_mesh': ## this should be GET, but it doesn't really matter
             verts, faces, normals, feature = self.get_new_shape()
             self.send_shape(verts, faces, normals, feature)
+            
         else:
             print('Unknow POST path')
     
     def get_new_shape(self, feature=None):
         if feature is None:
-            feature = self.interface.get_random_feature()
+            feature = self.interface.get_random_feature().squeeze()
 
         f = self.interface.get_f(feature)
         verts, faces, normals = get_mesh(f, N=self.mc_resolution, device=self.interface.device, flip_faces=0, return_normals=1) ## TODO: N into args
@@ -94,18 +99,34 @@ class TestHandler(http.server.SimpleHTTPRequestHandler):
         return verts, faces, normals, feature
 
     def send_shape(self, verts, faces, normals, feature):
+        """
+        Send the shape to the client by converting all the arrays into bytes.
+        This is more efficient than sending JSONs, but the decoding is more involved.
+        That's why we also send the shape of each array. See ajaxReceiveMesh() in wegl_gui.html.
+        Probably this is an overkill anyway. Previous version did it with JSONs. 
+        """
         self.send_response(200)
-        self.send_header("Content-type", "text/plain")
+        self.send_header("Content-type", "application/octet-stream")
         self.end_headers()
-        self.flush_headers()
-        ## Reduce the precision so we dont have to send that much over the connection
-        ## This is mostly relevant when hosting
-        self.wfile.write(json.dumps({
-            'verts': np.round(verts, self.decimals).tolist(),
-            'faces': faces.tolist(),
-            'normals': np.round(normals, self.decimals).tolist(),
-            'feature': feature.tolist(),
-            }).encode())
+
+        ## Covnert from tensor to numpy
+        feature = np.array(feature.detach().cpu())
+        
+        ## Functions to create bytes from the array shape and the content
+        get_shape_bytes = lambda arr : np.array(arr.shape, dtype=np.int32).tobytes()
+        get_array_bytes = lambda arr, dtype : arr.astype(dtype).tobytes()
+
+        ## Pack lengths and data into a single byte stream
+        response_bytes = (
+            get_shape_bytes(verts)   + get_array_bytes(verts, np.float32)   +
+            get_shape_bytes(faces)   + get_array_bytes(faces, np.uint16)    +
+            get_shape_bytes(normals) + get_array_bytes(normals, np.float32) +
+            get_shape_bytes(feature) + get_array_bytes(feature, np.float32)
+        )
+
+        self.wfile.write(response_bytes)
+
+
 
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -123,7 +144,6 @@ def get_args():
     parser.add_argument('interface', type=str, help='Path to the interface root folder.')
     parser.add_argument('--interface_args', default=None, type=str, help='Argument string forwarded to the model interface.')
     parser.add_argument('--mc_resolution', default=64, type=int, help='Resolution of marching cubes for detail/compute trade-off.')
-    parser.add_argument('--decimals', default=6, type=int, help='Number of decimal places to round vertices and normals before sending them over the connection. Less means smaller JSONs.')
     parser.add_argument('--device', default=None, type=str, help='CPU or CUDA. If unspecified, CUDA will be used if available.')
     parser.add_argument('--port', default=1234, type=int)
     args = parser.parse_args()

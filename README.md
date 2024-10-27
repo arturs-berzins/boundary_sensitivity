@@ -5,9 +5,8 @@
 ## GUI Demo for Semantic Editing
 
 The GUI is based on the [DualSDF demo](https://github.com/zekunhao1995/DualSDF).
-The method works with different models, given a proper interface to the model to evaluate it.
 
-Three pretrained models are available under `interfaces/DualSDF/pretrained/` based on the DualSDF generator: airplanes, cars, and chairs.
+Three pretrained models are available under `interfaces/DualSDF/pretrained/` based on the DualSDF generator trained on airplanes, cars, and chairs. To run:
 
 
 ```bash
@@ -20,10 +19,12 @@ Type `python demo.py --help` to see and adjust the launch arguments.
 
 https://user-images.githubusercontent.com/42326304/235196326-88f0550d-3b84-4758-9137-15215baa46fc.mp4
 
-### TODO
-- Add pre-trained IM-Net.
-- Details on how to add your own model.
-- Host the large pretrained model files not on GitHub
+
+The method and code works with different models, given a proper interface to the model to evaluate it. See `interfaces/interface_base.py` and `interfaces/DualSDF/interface.py` for more information and an example.
+
+The only requirements are `numpy`, `torch`, `scikit-image` for marching cubes, `pyyaml` for reading `.yaml` files for DualSDF. The tested versions are given in `requirements.txt`, but these should be quite flexible.
+
+The bulk of compute time spent doing marching cubes to extract the surface mesh from the implicit function.
 
 ## Licence
 MIT License

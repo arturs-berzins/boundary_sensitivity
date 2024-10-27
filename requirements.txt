@@ -1,0 +1,4 @@
+numpy==1.26.4
+scikit-image==0.22.0
+pyyaml==5.1
+torch==2.2.2

@@ -16,6 +16,9 @@ sys.path.insert(0, os.path.join(sys.path[0], 'interfaces/DualSDF'))
 class Interface(InterfaceBase):
     def __init__(self, interface_args, device):
         super(Interface, self).__init__(interface_args, device)
+        ## Define params and model if you want to use torch.func to compute the gradients
+        # self.params = dict(self.trainer.deepsdf_net.named_parameters())
+        # self.model = self.trainer.deepsdf_net
     
 
     def get_args(self):
